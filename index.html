@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Duel — Affiliate Portal</title>
+<style>
+  :root {
+    --bg: #0c0f22;
+    --card: #1c203b;
+    --field: #0e1124;
+    --field-border: #2a2f52;
+    --tabbar: #161a31;
+    --pill: #2d3358;
+    --text: #ffffff;
+    --muted: #8b91b4;
+    --muted-2: #5f6590;
+    --accent: #4957f5;
+    --accent-hover: #3f4def;
+    --accent-soft: rgba(73,87,245,.18);
+    --error: #ff6b7a;
+    /* shared easing + duration for the whole switch */
+    --ease: cubic-bezier(.45,.05,.2,1);
+    --dur: .3s;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* subtle glow so wide desktop screens don't feel empty */
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 40%, rgba(73,87,245,.10), transparent 70%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  /* centering frame — grows with content, fills the screen width */
+  #viewport {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+  }
+  /* fixed design size; JS zooms it to fill the screen width */
+  .wrap {
+    width: 402px;
+    visibility: hidden;           /* revealed once scaled, to avoid a flash */
+  }
+
+  /* Header */
+  .brand { text-align: center; margin-bottom: 24px; }
+  .brand h1 { font-size: 74px; font-weight: 800; letter-spacing: -3px; line-height: 1; }
+  .brand p { color: var(--muted); font-size: 19px; margin-top: 12px; font-weight: 400; }
+
+  /* Card */
+  .card {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 22px 22px 24px;
+  }
+
+  /* ---------- Tabs with sliding pill ---------- */
+  .tabs {
+    position: relative;
+    display: flex;
+    background: var(--tabbar);
+    border-radius: 14px;
+    padding: 6px;
+    margin-bottom: 28px;
+  }
+  .tab-pill {
+    position: absolute;
+    top: 6px; left: 6px;
+    width: calc(50% - 6px);
+    height: calc(100% - 12px);
+    background: var(--pill);
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    transform: translateX(0);
+    transition: transform var(--dur) var(--ease);
+    z-index: 0;
+  }
+  .tab-pill.right { transform: translateX(100%); }
+  .tab {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    text-align: center;
+    padding: 11px 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: color .25s ease;
+    font-family: inherit;
+  }
+  .tab.active { color: #fff; }
+
+  /* visible keyboard focus everywhere (mouse clicks don't show it) */
+  :focus-visible { outline: 2px solid #7c86ff; outline-offset: 2px; }
+  input:focus-visible { outline: none; }
+
+  /* ---------- Sliding / fading panel ---------- */
+  .panel { position: relative; transition: height var(--dur) var(--ease); }
+  .pane {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity .22s ease, transform var(--dur) var(--ease);
+  }
+  .pane.on {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: opacity .3s ease .08s, transform .34s var(--ease) .06s;
+  }
+
+  /* Fields */
+  .field { margin-bottom: 18px; }
+  .field:first-child { margin-top: 2px; }
+  .field label { display: block; font-size: 17px; color: var(--muted); margin-bottom: 11px; cursor: pointer; }
+  .input-row { position: relative; }
+  input {
+    width: 100%;
+    background: var(--field);
+    border: 1px solid transparent;
+    border-radius: 14px;
+    padding: 19px 18px;
+    /* JS zooms the page down on phones; keep the *rendered* size >= 16px
+       so iOS Safari doesn't auto-zoom when a field is tapped */
+    font-size: max(17px, calc(16px / var(--z, 1)));
+    color: #fff;
+    caret-color: #4a6bff;
+    outline: none;
+    transition: border-color .15s, background .15s;
+    font-family: inherit;
+  }
+  #login-pass { padding-right: 56px; }  /* room for the eye button */
+  input::placeholder { color: var(--muted-2); }
+  input:focus { border-color: #5b6193; background: #141830; }
+  input[aria-invalid="true"] { border-color: var(--error); }
+  input[type="password"] { letter-spacing: 2px; }
+  .eye {
+    position: absolute; right: 16px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 6px; display: flex; border-radius: 8px;
+  }
+  .forgot { text-align: right; margin: 16px 2px 0; }
+  .link-btn {
+    background: none; border: none; padding: 0;
+    color: var(--muted); font-size: 17px; font-family: inherit;
+    text-decoration: underline; cursor: pointer; border-radius: 4px;
+  }
+  .link-btn:hover { color: #fff; }
+
+  /* Inline status / error message */
+  .msg {
+    font-size: 15px;
+    line-height: 1.45;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.error { color: var(--error); background: rgba(255,107,122,.10); }
+  .msg.info  { color: #c5caf0; background: var(--accent-soft); }
+
+  /* Button */
+  .btn {
+    display: block;
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 19px;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .15s, transform .05s, opacity .15s;
+    font-family: inherit;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: .6; cursor: progress; }
+
+  /* ---------- Register info panel ---------- */
+  .reg-head { font-size: 24px; font-weight: 800; margin: 4px 0 14px; }
+  .reg-body { color: var(--muted); font-size: 17px; line-height: 1.55; margin-bottom: 26px; }
+
+  /* Footer */
+  .foot { text-align: center; color: var(--muted-2); font-size: 14px; margin-top: 22px; }
+  .foot a { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tab-pill, .panel, .pane, .pane.on { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="viewport">
+  <div class="wrap" id="stage">
+    <div class="brand">
+      <h1>Duel</h1>
+      <p>Affiliate portal</p>
+    </div>
+
+    <div class="card">
+      <div class="tabs" role="tablist" aria-label="Account">
+        <div class="tab-pill" id="tabPill" aria-hidden="true"></div>
+        <button class="tab active" id="tab-login" role="tab" aria-selected="true"
+                aria-controls="login-form" onclick="switchTab('login')">Login</button>
+        <button class="tab" id="tab-register" role="tab" aria-selected="false"
+                aria-controls="register-form" tabindex="-1" onclick="switchTab('register')">Register</button>
+      </div>
+
+      <div class="panel" id="panel">
+
+        <!-- ================= LOGIN ================= -->
+        <form id="login-form" class="pane on" role="tabpanel" aria-labelledby="tab-login"
+              onsubmit="return doLogin(event)" novalidate>
+          <div class="field">
+            <label for="login-partner">Partner ID *</label>
+            <div class="input-row">
+              <input type="text" id="login-partner" name="partner_id" required
+                     autocomplete="organization" autocapitalize="off" spellcheck="false" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="login-user">Username *</label>
+            <div class="input-row">
+              <input type="text" id="login-user" name="username" required
+                     autocomplete="username" autocapitalize="off" spellcheck="false" />
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="login-pass">Password *</label>
+            <div class="input-row">
+              <input type="password" id="login-pass" name="password" required autocomplete="current-password" />
+              <button type="button" class="eye" onclick="toggleEye('login-pass', this)"
+                      aria-label="Show password" aria-pressed="false" aria-controls="login-pass">
+                <svg class="i" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="forgot"><button type="button" class="link-btn" onclick="forgot()">Forgot password?</button></div>
+
+          <div class="msg" id="login-msg" role="alert" aria-live="assertive"></div>
+
+          <button type="submit" class="btn" id="login-btn" style="margin-top:18px;">Log in</button>
+        </form>
+
+        <!-- ================= REGISTER ================= -->
+        <div id="register-form" class="pane" role="tabpanel" aria-labelledby="tab-register" inert>
+          <h2 class="reg-head">Register with Duel.com</h2>
+          <p class="reg-body">Create your account on Duel.com first. Then come back here and log in with your partner id, username, and password.</p>
+          <a class="btn" id="register-link" href="https://duel.com" target="_blank" rel="noopener">Register with Duel.com</a>
+        </div>
+
+      </div><!-- /panel -->
+    </div>
+
+    <p class="foot">© <span id="yr"></span> Duel.com · <a href="https://duel.com" target="_blank" rel="noopener">duel.com</a></p>
+  </div>
+  </div><!-- /viewport -->
+
+<script>
+  /* ---------- Config ---------- */
+  // TODO: point this at the exact signup / affiliate-application page.
+  const REGISTER_URL = 'https://duel.com';
+  // TODO: your real endpoints (same origin, HTTPS).
+  const LOGIN_ENDPOINT  = null;   // e.g. '/api/affiliate/login'
+  const RESET_ENDPOINT  = null;   // e.g. '/forgot-password'
+
+  document.getElementById('register-link').href = REGISTER_URL;
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  /* ---------- Sliding panel plumbing ---------- */
+  const stage = document.getElementById('stage');
+  const panel = document.getElementById('panel');
+  const pill  = document.getElementById('tabPill');
+  const panes = {
+    login:    document.getElementById('login-form'),
+    register: document.getElementById('register-form'),
+  };
+  const tabs = {
+    login:    document.getElementById('tab-login'),
+    register: document.getElementById('tab-register'),
+  };
+  let current = 'login';
+
+  function fitPanel() {
+    const z = parseFloat(stage.style.zoom) || 1;
+    panel.style.height = (panes[current].getBoundingClientRect().height / z) + 'px';
+  }
+
+  function setPane(key) {
+    Object.entries(panes).forEach(([k, p]) => {
+      const on = k === key;
+      p.classList.toggle('on', on);
+      p.inert = !on;                 // hidden pane can't be tabbed into
+    });
+    current = key;
+    fitPanel();
+  }
+
+  function switchTab(which, focus) {
+    Object.entries(tabs).forEach(([k, t]) => {
+      const on = k === which;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+    });
+    pill.classList.toggle('right', which === 'register');
+    setPane(which);
+    if (focus) tabs[which].focus();
+  }
+
+  // Arrow keys move between tabs (standard tablist behaviour)
+  document.querySelector('.tabs').addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      const next = (e.key === 'ArrowLeft' || e.key === 'Home') ? 'login' : 'register';
+      switchTab(next, true);
+    }
+  });
+
+  /* ---------- Zoom the form to fill the screen width (small side margins) ---------- */
+  const REF_W = 402;                 // design width
+  function fitScreen() {
+    const vw = window.innerWidth;
+    const z = Math.min((vw - 28) / REF_W, 1);   // fill width, ~14px margins each side, never upscale
+    stage.style.zoom = z;
+    stage.style.setProperty('--z', z);          // used to keep input text >= 16px on iOS
+  }
+
+  window.addEventListener('load', () => {
+    setPane('login');
+    fitScreen();
+    requestAnimationFrame(() => {
+      fitScreen(); fitPanel();
+      stage.style.visibility = 'visible';
+    });
+  });
+  window.addEventListener('resize', () => { fitScreen(); fitPanel(); });
+
+  /* ---------- Password eye ---------- */
+  const EYE_OPEN   = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  const EYE_CLOSED = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  function toggleEye(id, btn) {
+    const el = document.getElementById(id);
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.querySelector('.i').innerHTML = show ? EYE_CLOSED : EYE_OPEN;
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    btn.setAttribute('aria-pressed', show);
+  }
+
+  /* ---------- Inline messages (instead of alert()) ---------- */
+  const msgEl = document.getElementById('login-msg');
+  function showMsg(text, kind = 'error') {
+    msgEl.textContent = text;
+    msgEl.className = 'msg show ' + kind;
+    fitPanel();
+  }
+  function clearMsg() {
+    msgEl.className = 'msg';
+    msgEl.textContent = '';
+    document.querySelectorAll('#login-form input').forEach(i => i.removeAttribute('aria-invalid'));
+    fitPanel();
+  }
+  document.querySelectorAll('#login-form input').forEach(i =>
+    i.addEventListener('input', () => { if (msgEl.classList.contains('show')) clearMsg(); })
+  );
+
+  /* ---------- Login ---------- */
+  async function doLogin(e) {
+    e.preventDefault();
+    clearMsg();
+
+    const fields = ['login-partner', 'login-user', 'login-pass'].map(id => document.getElementById(id));
+    const empty = fields.filter(f => !f.value.trim());
+    if (empty.length) {
+      empty.forEach(f => f.setAttribute('aria-invalid', 'true'));
+      empty[0].focus();
+      showMsg('Please fill in your partner ID, username and password.');
+      return false;
+    }
+
+    if (!LOGIN_ENDPOINT) {
+      showMsg('Login isn’t connected yet. Set LOGIN_ENDPOINT to your auth API.', 'info');
+      return false;
+    }
+
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.textContent = 'Logging in…';
+    try {
+      const res = await fetch(LOGIN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          partner_id: fields[0].value.trim(),
+          username:   fields[1].value.trim(),
+          password:   fields[2].value,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.location.href = data.redirect || '/dashboard';
+        return false;
+      }
+      if (res.status === 429) {
+        showMsg('Too many attempts. Please wait a few minutes and try again.');
+      } else {
+        // Keep this generic — don't reveal which field was wrong.
+        showMsg('Those details don’t match our records. Check them and try again.');
+      }
+    } catch {
+      showMsg('Couldn’t reach the server. Check your connection and try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Log in';
+    }
+    return false;
+  }
+
+  function forgot() {
+    if (RESET_ENDPOINT) { window.location.href = RESET_ENDPOINT; return; }
+    showMsg('Password reset isn’t connected yet. Set RESET_ENDPOINT to your reset page.', 'info');
+  }
+</script>
+</body>
+</html>
